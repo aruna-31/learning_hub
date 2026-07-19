@@ -69,6 +69,16 @@ def root():
         "status": "healthy"
     }
 
+def add_cors_headers(request: Request, response: JSONResponse) -> JSONResponse:
+    origin = request.headers.get("origin")
+    if origin:
+        import re
+        allowed_origins = [o.strip() for o in settings.FRONTEND_ORIGINS.split(",") if o.strip()]
+        if origin in allowed_origins or re.match(r"https://.*\.vercel\.app", origin):
+            response.headers["Access-Control-Allow-Origin"] = origin
+            response.headers["Access-Control-Allow-Credentials"] = "true"
+    return response
+
 # Exception Handlers
 @app.exception_handler(RequestValidationError)
 def validation_exception_handler(request: Request, exc: RequestValidationError):
@@ -87,39 +97,42 @@ def validation_exception_handler(request: Request, exc: RequestValidationError):
             err_dict["ctx"] = ctx_dict
         safe_errors.append(err_dict)
 
-    return JSONResponse(
+    res = JSONResponse(
         status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
         content={
             "error": "Validation Error",
             "detail": safe_errors
         }
     )
+    return add_cors_headers(request, res)
 
 @app.exception_handler(StarletteHTTPException)
 def http_exception_handler(request: Request, exc: StarletteHTTPException):
     """
     Handles standard HTTPExceptions.
     """
-    return JSONResponse(
+    res = JSONResponse(
         status_code=exc.status_code,
         content={
             "error": "HTTP Error",
             "detail": exc.detail
         }
     )
+    return add_cors_headers(request, res)
 
 @app.exception_handler(Exception)
 def general_exception_handler(request: Request, exc: Exception):
     """
     Catch-all for unhandled server exceptions.
     """
-    return JSONResponse(
+    res = JSONResponse(
         status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
         content={
             "error": "Internal Server Error",
             "detail": str(exc)
         }
     )
+    return add_cors_headers(request, res)
 
 @app.on_event("startup")
 async def startup_event():
