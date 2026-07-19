@@ -1,0 +1,17 @@
+[
+  {
+    "step_title": "Python Syntax & Basics",
+    "step_description": "Understand variables, basic types, conditionals, loops, functions, and standard libraries.",
+    "step_order": 1
+  },
+  {
+    "step_title": "Object-Oriented Programming",
+    "step_description": "Learn classes, inheritance, polymorphism, encapsulation, and magic methods.",
+    "step_order": 2
+  },
+  {
+    "step_title": "Asyncio & Concurrency",
+    "step_description": "Master async/await, event loops, tasks, coroutines, and concurrent execution using asyncio.",
+    "step_order": 3
+  }
+]

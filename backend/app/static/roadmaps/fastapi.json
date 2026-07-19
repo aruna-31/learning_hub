@@ -1,0 +1,22 @@
+[
+  {
+    "step_title": "FastAPI Basics",
+    "step_description": "Learn path parameters, query parameters, request body, and basic Pydantic models.",
+    "step_order": 1
+  },
+  {
+    "step_title": "Database Integration",
+    "step_description": "Connect FastAPI to PostgreSQL using SQLAlchemy 2.0 ORM and configure session dependencies.",
+    "step_order": 2
+  },
+  {
+    "step_title": "JWT Authentication & Security",
+    "step_description": "Implement user registration, secure password hashing with bcrypt, JWT token creation, and auth dependencies.",
+    "step_order": 3
+  },
+  {
+    "step_title": "Background Tasks & Optimizations",
+    "step_description": "Learn to run async tasks in the background, configure rate limiting, and write unit tests.",
+    "step_order": 4
+  }
+]
