@@ -184,29 +184,97 @@ class AggregatorService:
     @classmethod
     async def aggregate(cls, query: str) -> Dict[str, Any]:
         """
-        Runs all API fetches concurrently using asyncio.gather.
+        Runs all API fetches concurrently using asyncio.gather with dynamic queries.
         """
+        from app.services.skill_config import normalize_skill, get_skill_category
+        
+        normalized_skill = normalize_skill(query)
+        category = get_skill_category(normalized_skill)
+        
+        youtube_queries = []
+        github_queries = []
+        books_queries = []
+        stack_queries = [normalized_skill]
+        dataset_queries = [normalized_skill]
+
+        if category == "Music":
+            youtube_queries = [f"{normalized_skill} beginner lessons", f"{normalized_skill} tutorial", f"learn {normalized_skill}"]
+            books_queries = [f"{normalized_skill} beginner", f"{normalized_skill} lessons", f"{normalized_skill} theory"]
+            github_queries = [normalized_skill, "music practice", f"{normalized_skill} tools"]
+        elif category == "Technology":
+            youtube_queries = [f"{normalized_skill} beginner tutorial", f"learn {normalized_skill}", f"{normalized_skill} projects"]
+            github_queries = [f"{normalized_skill} projects", f"{normalized_skill} beginner"]
+            books_queries = [f"{normalized_skill} programming"]
+        elif category == "Sports":
+            if normalized_skill.lower() == "cricket":
+                youtube_queries = ["cricket batting drills", "cricket bowling tutorial", "learn cricket"]
+                books_queries = ["cricket coaching", "cricket fundamentals"]
+            else:
+                youtube_queries = [f"{normalized_skill} drills", f"{normalized_skill} tutorial", f"learn {normalized_skill}"]
+                books_queries = [f"{normalized_skill} coaching", f"{normalized_skill} fundamentals"]
+            github_queries = [normalized_skill]
+        elif category == "Photography":
+            youtube_queries = [f"{normalized_skill} tutorial", f"learn {normalized_skill}", f"{normalized_skill} for beginners"]
+            books_queries = [f"{normalized_skill} fundamentals", f"{normalized_skill} guide"]
+            github_queries = [normalized_skill]
+        else:
+            # Fallback for Dance, Art, Cooking, Languages, Communication, Other
+            youtube_queries = [f"{normalized_skill} tutorial", f"learn {normalized_skill}", f"{normalized_skill} beginner lessons"]
+            books_queries = [f"{normalized_skill} fundamentals", f"{normalized_skill} guide"]
+            github_queries = [normalized_skill]
+
         async with httpx.AsyncClient() as client:
-            tasks = [
-                cls.fetch_github(client, query),
-                cls.fetch_youtube(client, query),
-                cls.fetch_google_books(client, query),
-                cls.fetch_stack_exchange(client, query),
-                cls.fetch_datasets(client, query)
-            ]
+            # Gather tasks for all generated query variations
+            github_tasks = [cls.fetch_github(client, q) for q in github_queries]
+            youtube_tasks = [cls.fetch_youtube(client, q) for q in youtube_queries]
+            books_tasks = [cls.fetch_google_books(client, q) for q in books_queries]
+            stack_tasks = [cls.fetch_stack_exchange(client, q) for q in stack_queries]
+            dataset_tasks = [cls.fetch_datasets(client, q) for q in dataset_queries]
             
-            # Gather with return_exceptions=True so one failing service doesn't crash the whole search
-            results = await asyncio.gather(*tasks, return_exceptions=True)
+            all_tasks = github_tasks + youtube_tasks + books_tasks + stack_tasks + dataset_tasks
+            results = await asyncio.gather(*all_tasks, return_exceptions=True)
             
-            repos = results[0] if not isinstance(results[0], Exception) else []
-            videos = results[1] if not isinstance(results[1], Exception) else []
-            books = results[2] if not isinstance(results[2], Exception) else []
-            courses = results[3] if not isinstance(results[3], Exception) else []
-            datasets = results[4] if not isinstance(results[4], Exception) else []
+            # Unpack results in order
+            idx = 0
             
+            repos = []
+            for _ in github_queries:
+                res = results[idx]
+                if not isinstance(res, Exception):
+                    repos.extend(res)
+                idx += 1
+                
+            videos = []
+            for _ in youtube_queries:
+                res = results[idx]
+                if not isinstance(res, Exception):
+                    videos.extend(res)
+                idx += 1
+                
+            books = []
+            for _ in books_queries:
+                res = results[idx]
+                if not isinstance(res, Exception):
+                    books.extend(res)
+                idx += 1
+                
+            courses = []
+            for _ in stack_queries:
+                res = results[idx]
+                if not isinstance(res, Exception):
+                    courses.extend(res)
+                idx += 1
+                
+            datasets = []
+            for _ in dataset_queries:
+                res = results[idx]
+                if not isinstance(res, Exception):
+                    datasets.extend(res)
+                idx += 1
+
             # Simple static documentation links for key topics
             docs = []
-            lower_q = query.lower()
+            lower_q = normalized_skill.lower()
             if "python" in lower_q:
                 docs.append({"title": "Official Python Documentation", "url": "https://docs.python.org/3/"})
             elif "react" in lower_q:
@@ -216,7 +284,7 @@ class AggregatorService:
             elif "postgres" in lower_q:
                 docs.append({"title": "Official PostgreSQL Documentation", "url": "https://www.postgresql.org/docs/"})
             else:
-                docs.append({"title": f"Search docs for {query}", "url": f"https://devdocs.io/#q={query}"})
+                docs.append({"title": f"Search docs for {normalized_skill}", "url": f"https://devdocs.io/#q={normalized_skill}"})
 
             return {
                 "course": courses[0] if courses else None,

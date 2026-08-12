@@ -68,6 +68,7 @@ class DatasetSchema(BaseModel):
 
 class SearchResultSchema(BaseModel):
     course: Optional[CourseSchema] = None
+    category: Optional[str] = None
     roadmap: List[Any] = []
     repositories: List[RepositorySchema] = []
     videos: List[VideoSchema] = []
@@ -75,3 +76,4 @@ class SearchResultSchema(BaseModel):
     datasets: List[DatasetSchema] = []
     documentation: List[Dict[str, Any]] = []
     last_updated: str
+

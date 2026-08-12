@@ -75,7 +75,19 @@ interface Dataset {
 
 interface SearchResponse {
   course: Course | null;
-  roadmap: any[];
+  category?: string;
+  roadmap: Array<{
+    step_title: string;
+    step_description: string;
+    step_order: number;
+    resources: {
+      videos: VideoItem[];
+      books: BookItem[];
+      repositories: Repository[];
+      datasets: Dataset[];
+      documentation: any[];
+    };
+  }>;
   repositories: Repository[];
   videos: VideoItem[];
   books: BookItem[];
@@ -224,7 +236,7 @@ export default function SearchPage() {
               <Search className="w-5 h-5 text-slate-500 ml-4 pointer-events-none" />
               <input
                 type="text"
-                placeholder="Search Python, React, Kubernetes..."
+                placeholder="What do you want to learn?"
                 value={searchInput}
                 onChange={(e) => setSearchInput(e.target.value)}
                 className="w-full bg-transparent px-4 py-3.5 text-slate-100 placeholder-slate-500 focus:outline-none text-sm"
@@ -234,7 +246,7 @@ export default function SearchPage() {
                 disabled={isFetching}
                 className="mr-2.5 bg-indigo-600 hover:bg-indigo-500 text-white font-medium text-xs px-4 py-2 rounded-lg transition-all shadow-md flex items-center gap-1.5"
               >
-                {isFetching ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : 'Search'}
+                {isFetching ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : 'Discover My Path'}
               </button>
             </div>
           </div>
@@ -260,6 +272,14 @@ export default function SearchPage() {
 
       {queryParam && !error && (
         <>
+          {/* Skill Title & Category */}
+          {!isLoading && data && (
+            <div className="flex flex-col gap-1 my-4">
+              <h2 className="text-3xl font-extrabold text-white capitalize">{queryParam}</h2>
+              <span className="text-sm text-indigo-400 font-semibold">Category: {data.category || "Other"}</span>
+            </div>
+          )}
+
           {/* Main Course Hero Card (If present in Search results) */}
           {isLoading ? (
             <div className="h-44 w-full bg-slate-900/60 border border-slate-800/80 rounded-3xl animate-pulse" />
@@ -287,16 +307,96 @@ export default function SearchPage() {
             </motion.div>
           )}
 
+          {/* Learning Roadmap with Mapped Resources */}
+          {!isLoading && data?.roadmap && data.roadmap.length > 0 && (
+            <div className="space-y-4 my-8">
+              <h3 className="text-xl font-extrabold text-white flex items-center gap-2 border-b border-slate-800 pb-2">
+                <Map className="w-5 h-5 text-indigo-400" /> Learning Roadmap
+              </h3>
+              <div className="relative border-l-2 border-slate-800 ml-4 pl-6 space-y-6">
+                {data.roadmap.map((step, idx) => (
+                  <div key={idx} className="relative group">
+                    <div className="absolute -left-[35px] top-1.5 z-10 flex items-center justify-center w-6 h-6 rounded-full bg-slate-950 border-2 border-indigo-500 text-xs font-bold text-slate-300">
+                      {step.step_order}
+                    </div>
+                    <div className="glass-card p-5 space-y-3">
+                      <h4 className="text-base font-bold text-white leading-snug">
+                        {step.step_title}
+                      </h4>
+                      <p className="text-xs text-slate-400 leading-relaxed">
+                        {step.step_description}
+                      </p>
+                      
+                      {/* Mapped Resources for Stage */}
+                      <div className="mt-3 pt-3 border-t border-slate-800/80 space-y-2">
+                        <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">
+                          Resources for this stage:
+                        </span>
+                        
+                        {(!step.resources || 
+                          (step.resources.videos.length === 0 && 
+                           step.resources.books.length === 0 && 
+                           step.resources.repositories.length === 0 && 
+                           step.resources.datasets.length === 0 &&
+                           step.resources.documentation.length === 0)) ? (
+                          <p className="text-xs text-slate-500 italic">No specific resource mapped to this stage.</p>
+                        ) : (
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-2">
+                            {step.resources.videos.map((v, index) => (
+                              <div key={index} className="flex items-center justify-between p-2 rounded bg-slate-950/40 border border-slate-800/50 text-xs">
+                                <span className="text-slate-300 truncate max-w-[200px]" title={v.title}>🎥 {v.title}</span>
+                                <a href={v.url} target="_blank" rel="noreferrer" className="text-indigo-400 hover:text-indigo-300 ml-2 shrink-0">Open</a>
+                              </div>
+                            ))}
+                            {step.resources.books.map((b, index) => (
+                              <div key={index} className="flex items-center justify-between p-2 rounded bg-slate-950/40 border border-slate-800/50 text-xs">
+                                <span className="text-slate-300 truncate max-w-[200px]" title={b.title}>📖 {b.title}</span>
+                                <a href={b.info_link} target="_blank" rel="noreferrer" className="text-indigo-400 hover:text-indigo-300 ml-2 shrink-0">Open</a>
+                              </div>
+                            ))}
+                            {step.resources.repositories.map((r, index) => (
+                              <div key={index} className="flex items-center justify-between p-2 rounded bg-slate-950/40 border border-slate-800/50 text-xs">
+                                <span className="text-slate-300 truncate max-w-[200px]" title={r.name}>💻 {r.name}</span>
+                                <a href={r.url} target="_blank" rel="noreferrer" className="text-indigo-400 hover:text-indigo-300 ml-2 shrink-0">Open</a>
+                              </div>
+                            ))}
+                            {step.resources.datasets.map((d, index) => (
+                              <div key={index} className="flex items-center justify-between p-2 rounded bg-slate-950/40 border border-slate-800/50 text-xs">
+                                <span className="text-slate-300 truncate max-w-[200px]" title={d.title}>📊 {d.title}</span>
+                                <a href={d.url} target="_blank" rel="noreferrer" className="text-indigo-400 hover:text-indigo-300 ml-2 shrink-0">Open</a>
+                              </div>
+                            ))}
+                            {step.resources.documentation.map((dc, index) => (
+                              <div key={index} className="flex items-center justify-between p-2 rounded bg-slate-950/40 border border-slate-800/50 text-xs">
+                                <span className="text-slate-300 truncate max-w-[200px]" title={dc.title}>📄 {dc.title}</span>
+                                <a href={dc.url} target="_blank" rel="noreferrer" className="text-indigo-400 hover:text-indigo-300 ml-2 shrink-0">Open</a>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Recommended Resources Heading */}
+          {!isLoading && data && (
+            <h3 className="text-lg font-bold text-white mb-3">Recommended Resources</h3>
+          )}
+
           {/* Navigation Filter Tabs */}
           <div className="flex overflow-x-auto gap-2 pb-2 border-b border-slate-800/85 scrollbar-thin">
             {[
-              { id: 'overview', name: 'Overview', icon: <Sparkles className="w-4 h-4" /> },
-              { id: 'repos', name: 'Repositories', icon: <Code className="w-4 h-4" /> },
-              { id: 'videos', name: 'Videos', icon: <Video className="w-4 h-4" /> },
-              { id: 'books', name: 'Books', icon: <BookOpen className="w-4 h-4" /> },
-              { id: 'datasets', name: 'Datasets', icon: <Database className="w-4 h-4" /> },
-              { id: 'docs', name: 'Documentation', icon: <FileText className="w-4 h-4" /> },
-            ].map((tab) => (
+              { id: 'overview', name: 'Overview', icon: <Sparkles className="w-4 h-4" />, show: true },
+              { id: 'repos', name: 'Repositories', icon: <Code className="w-4 h-4" />, show: data?.repositories && data.repositories.length > 0 },
+              { id: 'videos', name: 'Videos', icon: <Video className="w-4 h-4" />, show: data?.videos && data.videos.length > 0 },
+              { id: 'books', name: 'Books', icon: <BookOpen className="w-4 h-4" />, show: data?.books && data.books.length > 0 },
+              { id: 'datasets', name: 'Datasets', icon: <Database className="w-4 h-4" />, show: data?.datasets && data.datasets.length > 0 },
+              { id: 'docs', name: 'Documentation', icon: <FileText className="w-4 h-4" />, show: data?.documentation && data.documentation.length > 0 },
+            ].filter(tab => tab.show).map((tab) => (
               <button
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id as any)}

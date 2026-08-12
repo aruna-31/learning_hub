@@ -16,7 +16,7 @@ class Settings(BaseSettings):
     SECRET_KEY: str = Field(..., validation_alias="SECRET_KEY")
     ALGORITHM: str = Field("HS256", validation_alias="ALGORITHM")
     FRONTEND_ORIGINS: str = Field(
-        "http://localhost:5173,http://127.0.0.1:5173",
+        "http://localhost:5174,http://127.0.0.1:5174",
         validation_alias="FRONTEND_ORIGINS"
     )
     YOUTUBE_API_KEY: str = Field("", validation_alias="YOUTUBE_API_KEY")
