@@ -4,16 +4,14 @@ import logging
 import asyncio
 from typing import List, Dict, Any
 
+from app.config import settings
+
 logger = logging.getLogger(__name__)
 
 GITHUB_API_URL = "https://api.github.com/search/repositories"
 YOUTUBE_API_URL = "https://www.googleapis.com/youtube/v3/search"
 GOOGLE_BOOKS_URL = "https://www.googleapis.com/books/v1/volumes"
 STACK_EXCHANGE_URL = "https://api.stackexchange.com/2.3/search/advanced"
-
-# API keys / tokens from env
-GITHUB_TOKEN = os.getenv("GITHUB_TOKEN", "")
-YOUTUBE_API_KEY = os.getenv("YOUTUBE_API_KEY", "")
 
 async def fetch_with_retry(client: httpx.AsyncClient, url: str, params: Dict[str, Any], headers: Dict[str, Any] = None, retries: int = 3, backoff: float = 0.5) -> Dict[str, Any]:
     """
@@ -27,6 +25,9 @@ async def fetch_with_retry(client: httpx.AsyncClient, url: str, params: Dict[str
             elif response.status_code in [403, 429]:
                 # Rate limit, wait and retry
                 logger.warning(f"Rate limited or forbidden on {url}, attempt {attempt+1}/{retries}")
+                if "googleapis.com/books" in url and response.status_code in [403, 429]:
+                    logger.warning("Google Books API quota exceeded or forbidden, breaking early.")
+                    break
             else:
                 logger.error(f"HTTP error {response.status_code} from {url}: {response.text}")
         except httpx.RequestError as exc:
@@ -41,8 +42,8 @@ class AggregatorService:
     @staticmethod
     async def fetch_github(client: httpx.AsyncClient, query: str) -> List[Dict[str, Any]]:
         headers = {}
-        if GITHUB_TOKEN:
-            headers["Authorization"] = f"token {GITHUB_TOKEN}"
+        if settings.GITHUB_TOKEN:
+            headers["Authorization"] = f"token {settings.GITHUB_TOKEN}"
         headers["User-Agent"] = "LearnHub-Aggregator"
         
         params = {"q": query, "sort": "stars", "order": "desc", "per_page": 5}
@@ -64,7 +65,7 @@ class AggregatorService:
 
     @staticmethod
     async def fetch_youtube(client: httpx.AsyncClient, query: str) -> List[Dict[str, Any]]:
-        if not YOUTUBE_API_KEY:
+        if not settings.YOUTUBE_API_KEY:
             logger.warning("YOUTUBE_API_KEY is not set. YouTube search will return empty/mocked data.")
             # Fallback mock/simulated results for demo purposes if no key
             return [
@@ -84,7 +85,7 @@ class AggregatorService:
             "q": query,
             "type": "video",
             "maxResults": 5,
-            "key": YOUTUBE_API_KEY
+            "key": settings.YOUTUBE_API_KEY
         }
         data = await fetch_with_retry(client, YOUTUBE_API_URL, params)
         
@@ -109,7 +110,7 @@ class AggregatorService:
     @staticmethod
     async def fetch_google_books(client: httpx.AsyncClient, query: str) -> List[Dict[str, Any]]:
         params = {"q": query, "maxResults": 5}
-        data = await fetch_with_retry(client, GOOGLE_BOOKS_URL, params)
+        data = await fetch_with_retry(client, GOOGLE_BOOKS_URL, params, retries=2, backoff=0.3)
         
         items = data.get("items", [])
         normalized = []
@@ -294,4 +295,86 @@ class AggregatorService:
                 "books": books,
                 "datasets": datasets,
                 "documentation": docs
+            }
+
+    @classmethod
+    async def aggregate_discover(cls, query: str) -> Dict[str, Any]:
+        from app.services.skill_config import normalize_skill, get_skill_category
+        
+        normalized_skill = normalize_skill(query)
+        category = get_skill_category(normalized_skill)
+        
+        youtube_queries = [f"learn {normalized_skill}", f"{normalized_skill} tutorial"]
+        github_queries = [f"{normalized_skill} learning", f"{normalized_skill} examples"]
+        books_queries = [f"{normalized_skill} beginner", f"{normalized_skill} guide"]
+        
+        interview_queries = []
+        practice_queries = []
+        project_queries = []
+        course_queries = [f"{normalized_skill} course"]
+        
+        if category == "Technology":
+            interview_queries = [f"{normalized_skill} interview questions"]
+            practice_queries = [f"{normalized_skill} practice"]
+            project_queries = [f"{normalized_skill} projects"]
+            github_queries = [f"{normalized_skill} tutorials", f"{normalized_skill} roadmap"]
+        elif category == "Music":
+            youtube_queries = [f"{normalized_skill} beginner lessons"]
+            github_queries = []
+        
+        async with httpx.AsyncClient() as client:
+            github_tasks = [cls.fetch_github(client, q) for q in github_queries]
+            youtube_tasks = [cls.fetch_youtube(client, q) for q in youtube_queries]
+            books_tasks = [cls.fetch_google_books(client, q) for q in books_queries]
+            
+            interview_tasks = [cls.fetch_github(client, q) for q in interview_queries]
+            practice_tasks = [cls.fetch_github(client, q) for q in practice_queries]
+            project_tasks = [cls.fetch_github(client, q) for q in project_queries]
+            course_tasks = [cls.fetch_youtube(client, q) for q in course_queries]
+            
+            all_tasks = github_tasks + youtube_tasks + books_tasks + interview_tasks + practice_tasks + project_tasks + course_tasks
+            results = await asyncio.gather(*all_tasks, return_exceptions=True)
+            
+            idx = 0
+            
+            def extract(count):
+                nonlocal idx
+                res_list = []
+                for _ in range(count):
+                    res = results[idx]
+                    if not isinstance(res, Exception):
+                        res_list.extend(res)
+                    idx += 1
+                return res_list
+                
+            repos = extract(len(github_queries))
+            videos = extract(len(youtube_queries))
+            books = extract(len(books_queries))
+            interview_questions = extract(len(interview_queries))
+            practice = extract(len(practice_queries))
+            projects = extract(len(project_queries))
+            courses = extract(len(course_queries))
+            
+            docs = []
+            lower_q = normalized_skill.lower()
+            if "python" in lower_q:
+                docs.append({"title": "Official Python Documentation", "url": "https://docs.python.org/3/"})
+            elif "react" in lower_q:
+                docs.append({"title": "Official React Documentation", "url": "https://react.dev/"})
+            elif "fastapi" in lower_q:
+                docs.append({"title": "Official FastAPI Documentation", "url": "https://fastapi.tiangolo.com/"})
+            elif "postgres" in lower_q:
+                docs.append({"title": "Official PostgreSQL Documentation", "url": "https://www.postgresql.org/docs/"})
+            elif category == "Technology":
+                docs.append({"title": f"Search docs for {normalized_skill}", "url": f"https://devdocs.io/#q={normalized_skill}"})
+            
+            return {
+                "videos": videos,
+                "github": repos,
+                "books": books,
+                "interview_questions": interview_questions,
+                "documentation": docs,
+                "courses": courses,
+                "practice": practice,
+                "projects": projects
             }

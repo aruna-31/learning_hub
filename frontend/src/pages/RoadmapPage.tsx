@@ -5,7 +5,7 @@ import { apiClient } from '../services/api';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Map, Sparkles, CheckCircle2, Circle, ChevronDown, 
-  ChevronUp, Loader2, ArrowLeft, PlayCircle, Plus, FileText, X
+  ChevronUp, Loader2, ArrowLeft, PlayCircle, Plus, FileText, X, Video, BookOpen, HelpCircle, Code2, GraduationCap, FolderKanban, ExternalLink, LibraryBig
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 
@@ -41,6 +41,29 @@ interface ProgressStatus {
   progress_percent: number;
 }
 
+interface DiscoveryItem {
+  title: string;
+  url: string;
+  description?: string | null;
+  source?: string;
+}
+
+interface SearchResponse {
+  repositories: Array<{ name: string; url: string; description?: string | null }>;
+  videos: Array<{ title: string; url: string; description?: string | null; channel_title?: string | null }>;
+  books: Array<{ title: string; info_link: string; description?: string | null; authors?: string | null }>;
+  datasets: Array<{ title: string; url: string; description?: string | null; creator?: string | null }>;
+  documentation: Array<{ title: string; url: string; description?: string | null }>;
+  roadmap: Array<{ step_title: string; resources: { videos: Array<{ title: string; url: string }>; books: Array<{ title: string; info_link: string }>; repositories: Array<{ name: string; url: string }>; datasets: Array<{ title: string; url: string }>; documentation: Array<{ title: string; url: string }> } }>;
+}
+
+interface ResourceGroup {
+  title: string;
+  icon: typeof Video;
+  accent: string;
+  items: DiscoveryItem[];
+}
+
 export default function RoadmapPage() {
   const { topic } = useParams<{ topic: string }>();
   const navigate = useNavigate();
@@ -61,6 +84,19 @@ export default function RoadmapPage() {
       const res = await apiClient.get(`/roadmap/${encodeURIComponent(topic.toLowerCase())}`);
       return res.data;
     },
+    enabled: !!topic,
+  });
+
+  // Keep skill-wide discovery separate from the existing roadmap-step resources.
+  const { data: discoveryData, isLoading: discoveryLoading } = useQuery<SearchResponse>({
+    queryKey: ['skillDiscovery', topic],
+    queryFn: async () => (await apiClient.get(`/search?query=${encodeURIComponent(topic || '')}`)).data,
+    enabled: !!topic,
+  });
+
+  const { data: globalResources, isLoading: globalLoading } = useQuery({
+    queryKey: ['globalResources', topic],
+    queryFn: async () => (await apiClient.get(`/resources/discover?skill=${encodeURIComponent(topic || '')}`)).data,
     enabled: !!topic,
   });
 
@@ -236,7 +272,7 @@ export default function RoadmapPage() {
   };
 
   // Loading States
-  const isGlobalLoading = staticLoading || enrollmentsLoading || dbStepsLoading || progressLoading;
+  const isGlobalLoading = staticLoading || enrollmentsLoading || dbStepsLoading || progressLoading || discoveryLoading || globalLoading;
 
   if (!topic) {
     return (
@@ -254,6 +290,37 @@ export default function RoadmapPage() {
   const renderSteps = activeEnrollment && dbSteps?.items 
     ? dbSteps.items.sort((a, b) => a.step_order - b.step_order)
     : staticSteps?.sort((a, b) => a.step_order - b.step_order) || [];
+
+  const resourceGroups: ResourceGroup[] = [];
+  if (globalResources?.resources) {
+    const res = globalResources.resources;
+    if (res.videos?.length > 0) {
+      resourceGroups.push({ title: 'Video Tutorials', icon: Video, accent: 'text-rose-400', items: res.videos.map((v: any) => ({ title: v.title, url: v.url, description: v.description, source: v.channel_title || 'YouTube' })) });
+    }
+    if (res.github?.length > 0) {
+      resourceGroups.push({ title: 'GitHub Repositories', icon: Code2, accent: 'text-slate-200', items: res.github.map((r: any) => ({ title: r.name || r.title, url: r.url, description: r.description, source: r.language || 'GitHub' })) });
+    }
+    if (res.books?.length > 0) {
+      resourceGroups.push({ title: 'E-books / Books', icon: BookOpen, accent: 'text-amber-400', items: res.books.map((b: any) => ({ title: b.title, url: b.url || b.info_link, description: b.description, source: b.authors || 'Google Books' })) });
+    }
+    if (res.interview_questions?.length > 0) {
+      resourceGroups.push({ title: 'Interview Questions', icon: HelpCircle, accent: 'text-violet-400', items: res.interview_questions.map((q: any) => ({ title: q.name || q.title, url: q.url, description: q.description, source: 'Interview Prep' })) });
+    }
+    if (res.documentation?.length > 0) {
+      resourceGroups.push({ title: 'Documentation', icon: LibraryBig, accent: 'text-cyan-400', items: res.documentation.map((d: any) => ({ title: d.title, url: d.url, description: d.description, source: 'Docs' })) });
+    }
+    if (res.courses?.length > 0) {
+      resourceGroups.push({ title: 'Courses / Learning Resources', icon: GraduationCap, accent: 'text-indigo-400', items: res.courses.map((c: any) => ({ title: c.title, url: c.url, description: c.description, source: c.channel_title || 'Course' })) });
+    }
+    if (res.practice?.length > 0) {
+      resourceGroups.push({ title: 'Practice / Coding Resources', icon: Code2, accent: 'text-emerald-400', items: res.practice.map((p: any) => ({ title: p.name || p.title, url: p.url, description: p.description, source: p.creator || 'Practice' })) });
+    }
+    if (res.projects?.length > 0) {
+      resourceGroups.push({ title: 'Projects / Hands-on Resources', icon: FolderKanban, accent: 'text-pink-400', items: res.projects.map((p: any) => ({ title: p.name || p.title, url: p.url, description: p.description, source: 'Project Repo' })) });
+    }
+  }
+
+  const getStepResources = (title: string) => discoveryData?.roadmap.find(step => step.step_title.trim().toLowerCase() === title.trim().toLowerCase())?.resources;
 
   return (
     <div className="space-y-8 max-w-4xl mx-auto">
@@ -318,6 +385,50 @@ export default function RoadmapPage() {
         </div>
       </div>
 
+      {!globalLoading && resourceGroups.length > 0 && (
+        <section className="space-y-5" aria-labelledby="all-resources-heading">
+          <div className="flex items-end justify-between gap-4 border-b border-slate-800 pb-3">
+            <div>
+              <p className="text-xs font-bold uppercase tracking-[0.2em] text-indigo-400">All resources for {topic}</p>
+              <h2 id="all-resources-heading" className="mt-1 text-2xl font-extrabold text-white">Everything you need to learn {topic}</h2>
+            </div>
+            <span className="hidden sm:block text-xs text-slate-500">Choose the way you learn best</span>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {resourceGroups.map(group => {
+              const Icon = group.icon;
+              return (
+                <div key={group.title} className="glass-card p-5 space-y-4">
+                  <div className="flex items-center gap-3">
+                    <div className={`p-2.5 rounded-xl bg-slate-900 border border-slate-800 ${group.accent}`}><Icon className="w-5 h-5" /></div>
+                    <h3 className="font-bold text-white">{group.title}</h3>
+                  </div>
+                  <div className="space-y-2">
+                    {group.items.slice(0, 4).map((item, index) => (
+                      <a key={`${item.url}-${index}`} href={item.url} target="_blank" rel="noreferrer" className="block rounded-xl border border-slate-800/80 bg-slate-950/30 p-3 hover:border-indigo-500/40 hover:bg-slate-900 transition-colors group">
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <p className="text-sm font-semibold text-slate-200 group-hover:text-white truncate">{item.title}</p>
+                            {item.description && <p className="mt-1 text-xs leading-relaxed text-slate-500 line-clamp-2">{item.description}</p>}
+                            {item.source && <p className="mt-1.5 text-[10px] font-bold uppercase tracking-wider text-slate-500">{item.source}</p>}
+                          </div>
+                          <ExternalLink className="w-4 h-4 mt-0.5 shrink-0 text-slate-500 group-hover:text-indigo-400" />
+                        </div>
+                      </a>
+                    ))}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </section>
+      )}
+
+      <section className="space-y-1 pt-2" aria-labelledby="roadmap-heading">
+        <p className="text-xs font-bold uppercase tracking-[0.2em] text-indigo-400">Learning roadmap</p>
+        <h2 id="roadmap-heading" className="text-2xl font-extrabold text-white">Build your {topic} skills step by step</h2>
+      </section>
+
       {isGlobalLoading ? (
         <div className="flex flex-col items-center justify-center py-20 gap-3">
           <Loader2 className="w-8 h-8 animate-spin text-indigo-500" />
@@ -333,6 +444,7 @@ export default function RoadmapPage() {
             // Extract details safely
             const title = 'step_title' in step ? step.step_title : (step as DBStep).title;
             const description = 'step_description' in step ? step.step_description : (step as DBStep).description;
+            const stepResources = getStepResources(title);
 
             return (
               <div key={stepId} className="relative group">
@@ -389,6 +501,19 @@ export default function RoadmapPage() {
                           {description || 'Explore aggregated resources on your search dashboard to learn this step.'}
                         </p>
                         
+                        {stepResources && Object.values(stepResources).some(resources => resources.length > 0) && (
+                          <div className="mt-4 pt-4 border-t border-slate-800/80 space-y-2">
+                            <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Resources for this step</p>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                              {[...stepResources.videos.map(item => ({ title: item.title, url: item.url, label: 'Video' })), ...stepResources.books.map(item => ({ title: item.title, url: item.info_link, label: 'Book' })), ...stepResources.repositories.map(item => ({ title: item.name, url: item.url, label: 'Repository' })), ...stepResources.datasets.map(item => ({ title: item.title, url: item.url, label: 'Practice' })), ...stepResources.documentation.map(item => ({ title: item.title, url: item.url, label: 'Documentation' }))].slice(0, 4).map((resource, resourceIndex) => (
+                                <a key={`${resource.url}-${resourceIndex}`} href={resource.url} target="_blank" rel="noreferrer" className="flex items-center justify-between gap-2 rounded-lg bg-slate-950/50 border border-slate-800 px-3 py-2 text-xs text-slate-300 hover:border-indigo-500/40 hover:text-white transition-colors">
+                                  <span className="truncate"><span className="text-indigo-400">{resource.label}:</span> {resource.title}</span><ExternalLink className="w-3.5 h-3.5 shrink-0" />
+                                </a>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
                         {/* Quick study resource button shortcut */}
                         <div className="mt-4 flex gap-3">
                           <button

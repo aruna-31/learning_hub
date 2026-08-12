@@ -7,7 +7,25 @@ from app.services.resource import resource_service
 from app.dependencies.auth import get_current_user
 from app.models.user import User
 
+from app.schemas.search import DiscoverResponseSchema
+from app.services.search import search_service
+
 router = APIRouter(prefix="/resources", tags=["Resources"])
+
+@router.get(
+    "/discover",
+    response_model=DiscoverResponseSchema,
+    status_code=status.HTTP_200_OK,
+    summary="Discover unified learning resources for a skill"
+)
+async def discover_resources(
+    skill: str = Query(..., min_length=1, description="The skill or technology to learn, e.g. Python"),
+    db: Session = Depends(get_db)
+):
+    """
+    Fetches global aggregated resources across all platforms (videos, GitHub, books, interview prep, docs, courses, practice, projects).
+    """
+    return await search_service.discover_resources(db, query=skill)
 
 @router.post(
     "",

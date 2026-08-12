@@ -77,3 +77,17 @@ class SearchResultSchema(BaseModel):
     documentation: List[Dict[str, Any]] = []
     last_updated: str
 
+class DiscoveryResourceGroupSchema(BaseModel):
+    videos: List[Any] = []
+    github: List[Any] = []
+    books: List[Any] = []
+    interview_questions: List[Any] = []
+    documentation: List[Any] = []
+    courses: List[Any] = []
+    practice: List[Any] = []
+    projects: List[Any] = []
+
+class DiscoverResponseSchema(BaseModel):
+    skill: str
+    resources: DiscoveryResourceGroupSchema
+    total_resources: int

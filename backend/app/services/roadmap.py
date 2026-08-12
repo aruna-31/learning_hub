@@ -123,6 +123,24 @@ class RoadmapService:
                     ("Speaking", f"Develop verbal skills and construct dialogues in {normalized_name}"),
                     ("Reading/Writing", f"Learn reading comprehension and write paragraphs in {normalized_name}")
                 ]
+            elif category == "Communication":
+                stages = [
+                    ("Fundamentals", f"Understand the core principles and psychology behind {normalized_name}"),
+                    ("Content Preparation", f"Learn how to research, structure, and write material for {normalized_name}"),
+                    ("Delivery & Tone", f"Master vocal projection, pacing, tone, and body language in {normalized_name}"),
+                    ("Audience Engagement", f"Techniques to read the room, handle questions, and engage effectively in {normalized_name}"),
+                    ("Practice & Feedback", f"Conduct mock sessions, record yourself, and iterate on feedback for {normalized_name}"),
+                    ("Live Performance", f"Deliver real-world presentations or speeches utilizing {normalized_name} skills")
+                ]
+            elif category == "Academics":
+                stages = [
+                    ("Foundational Concepts", f"Learn the basic definitions, axioms, and introductory principles of {normalized_name}"),
+                    ("Core Theories", f"Study the central theories, formulas, and methodologies in {normalized_name}"),
+                    ("Problem Solving", f"Apply theories to solve standard problems and exercises in {normalized_name}"),
+                    ("Advanced Topics", f"Dive into complex sub-disciplines and advanced concepts of {normalized_name}"),
+                    ("Research & Application", f"Read literature, conduct experiments, or write papers related to {normalized_name}"),
+                    ("Mastery", f"Synthesize knowledge and tackle real-world analytical challenges in {normalized_name}")
+                ]
             else:
                 stages = [
                     ("Beginner Fundamentals", f"Master beginner fundamentals of {normalized_name}"),

@@ -219,5 +219,74 @@ class SearchService:
             "last_updated": raw_data.get("last_updated", datetime.utcnow().isoformat())
         }
 
+    @classmethod
+    async def discover_resources(cls, db: Session, query: str) -> Dict[str, Any]:
+        normalized_skill = normalize_skill(query)
+        clean_query = f"discover_{normalized_skill.lower().strip()}"
+        
+        metadata = search_repo.get_cache_metadata(db, clean_query)
+        cache_valid = False
+        if metadata:
+            age = datetime.utcnow() - metadata.last_updated
+            if age < timedelta(hours=24):
+                cache_valid = True
+
+        if cache_valid and metadata:
+            cached_results = search_repo.get_cached_results(db, metadata)
+        else:
+            agg_data = await AggregatorService.aggregate_discover(query)
+            
+            datasets_list = []
+            for item in agg_data.get("interview_questions", []):
+                datasets_list.append({"title": item.get("name") or item.get("title", ""), "url": item.get("url", ""), "description": item.get("description", ""), "creator": "interview_questions"})
+            for item in agg_data.get("practice", []):
+                datasets_list.append({"title": item.get("name") or item.get("title", ""), "url": item.get("url", ""), "description": item.get("description", ""), "creator": "practice"})
+            for item in agg_data.get("projects", []):
+                datasets_list.append({"title": item.get("name") or item.get("title", ""), "url": item.get("url", ""), "description": item.get("description", ""), "creator": "projects"})
+            for item in agg_data.get("courses", []):
+                datasets_list.append({"title": item.get("title", ""), "url": item.get("url", ""), "description": item.get("description", ""), "creator": "courses"})
+                
+            cacheable_data = {
+                "repositories": agg_data.get("github", []),
+                "videos": agg_data.get("videos", []),
+                "books": agg_data.get("books", []),
+                "datasets": datasets_list
+            }
+            
+            saved_metadata = search_repo.save_cached_results(db, clean_query, cacheable_data)
+            cached_results = search_repo.get_cached_results(db, saved_metadata)
+            
+        def get_creator(item):
+            return getattr(item, "creator", "") if hasattr(item, "creator") else item.get("creator", "")
+            
+        raw_data = {
+            "github": cached_results.get("repositories", []),
+            "videos": cached_results.get("videos", []),
+            "books": cached_results.get("books", []),
+            "documentation": cached_results.get("documentation", []),
+            "interview_questions": [d for d in cached_results.get("datasets", []) if get_creator(d) == "interview_questions"],
+            "practice": [d for d in cached_results.get("datasets", []) if get_creator(d) == "practice"],
+            "projects": [d for d in cached_results.get("datasets", []) if get_creator(d) == "projects"],
+            "courses": [d for d in cached_results.get("datasets", []) if get_creator(d) == "courses"],
+        }
+            
+        def rank_group(group: List[Any], url_key: str = "url"):
+            return cls.rank_and_deduplicate(group, normalized_skill, url_key=url_key)
+
+        return {
+            "skill": normalized_skill,
+            "resources": {
+                "videos": rank_group(raw_data.get("videos", [])),
+                "github": cls.rank_and_deduplicate(raw_data.get("github", []), normalized_skill, title_key="name"),
+                "books": rank_group(raw_data.get("books", []), url_key="info_link"),
+                "interview_questions": rank_group(raw_data.get("interview_questions", [])),
+                "documentation": rank_group(raw_data.get("documentation", [])),
+                "courses": rank_group(raw_data.get("courses", [])),
+                "practice": rank_group(raw_data.get("practice", [])),
+                "projects": rank_group(raw_data.get("projects", []))
+            },
+            "total_resources": sum(len(raw_data.get(k, [])) for k in ["videos", "github", "books", "interview_questions", "documentation", "courses", "practice", "projects"])
+        }
+
 search_service = SearchService()
 
